@@ -1,0 +1,106 @@
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        ArrayList<MyObject> objects = new ArrayList<>();
+        List<String> data = Files.readAllLines(Path.of(args[1]));
+        int k = Integer.parseInt(args[0]);
+        Map<Integer, double[]> centroidData = new HashMap<>();
+        double pastE = Double.MAX_VALUE;
+        double currE;
+
+        //read and parse data
+        for (String lineOfData : data)
+            objects.add(new MyObject(lineOfData,k));
+
+        while (didClustersChange(objects)){
+            setCentroids(objects,centroidData);
+            assignToCluster(objects,centroidData);
+            currE = countE(objects,centroidData);
+
+            if(pastE == currE)
+                break;
+
+            centroidData.forEach((key,value) -> System.out.println(key +": "+ Arrays.toString(value)));
+
+            pastE = currE;
+
+            System.out.println("E = "+currE);
+        }
+
+    }
+    //returns sum of two vectors
+    public static double[] sumVectors(double[] v1, double[] v2){
+        double[] res = new double[v1.length];
+
+        for(int i = 0; i < res.length; i++)
+            res[i] = (v1[i] + v2[i]);
+
+        return res;
+    }
+    public static void setCentroids(ArrayList<MyObject> objects, Map<Integer, double[]> centroidData) {
+        HashMap<Integer, Integer> countClusters = new HashMap<>();
+
+        //reset centroids before counting new values
+        centroidData.replaceAll((k, v) -> new double[v.length]);
+
+        //sum vectors from clusters and count how many objects each cluster has
+        for (MyObject object : objects) {
+            int cluster = object.getCluster();
+            double[] vector = object.getVector();
+
+            if (!centroidData.containsKey(cluster)) {
+                centroidData.put(cluster, vector);
+            } else {
+                centroidData.put(cluster, sumVectors(centroidData.get(cluster), vector));
+            }
+            if (!countClusters.containsKey(cluster))
+                countClusters.put(cluster, 1);
+            else
+                countClusters.put(cluster, countClusters.get(cluster) + 1);
+        }
+
+        //set new centroids
+        centroidData.forEach((cluster, vector) -> {
+            if (countClusters.getOrDefault(cluster, 0) == 0)
+                return;
+
+            for (int i = 0; i < vector.length; i++)
+                vector[i] = vector[i] / countClusters.getOrDefault(cluster, 0);
+
+            centroidData.replace(cluster, vector);
+        });
+    }
+    //assign
+    public static void assignToCluster(ArrayList<MyObject> objects, Map<Integer, double[]> centroidData){
+        for (MyObject object : objects){
+
+            //get minimum value from distances map and set given cluster as new cluster
+            Map<Double,Integer> distances = new HashMap<>();
+            centroidData.forEach((cluster,centroid)-> distances.put(object.distance(centroid),cluster));
+            Map.Entry<Double,Integer> min = Collections.min(distances.entrySet(),Map.Entry.comparingByKey());
+            object.setCluster(min.getValue());
+        }
+    }
+    //returns true if clusters did change, false otherwise
+    public static boolean didClustersChange(ArrayList<MyObject> objects){
+        for (MyObject object : objects) {
+            if(object.getCluster() != object.getPastCluster())
+                return true;
+        }
+        return false;
+    }
+    //count Error
+    public static double countE(ArrayList<MyObject> objects, Map<Integer, double[]> centroidData){
+        double res = 0;
+
+        for(MyObject object : objects) {
+            res += object.distance(centroidData.get(object.getCluster()));
+        }
+
+        return res;
+    }
+}
